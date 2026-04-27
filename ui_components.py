@@ -2,6 +2,8 @@ import pygame
 import os
 from flag_utils import get_flag_surface
 from language import get_string
+from logger import get_band_from_freq
+from datetime import datetime
 
 def draw_callsign_and_flag(screen, font, callsign, color, center_x, y, flag_sprite_sheet):
     """Draws a callsign with its flag, centered horizontally."""
@@ -30,6 +32,237 @@ def draw_callsign_and_flag(screen, font, callsign, color, center_x, y, flag_spri
 class UIField:
     def __init__(self, rect, label, value=""):
         self.rect, self.label, self.value, self.active = rect, label, value, False
+
+class MainScreen:
+    def __init__(self, font, small_font, theme, user_config, lang, app_state, flag_sprite_sheet, on_lookup, on_log_qso, on_mode_select, on_menu_open, on_time_edit):
+        self.font = font
+        self.small_font = small_font
+        self.theme = theme
+        self.user_config = user_config
+        self.lang = lang
+        self.app_state = app_state
+        self.flag_sprite_sheet = flag_sprite_sheet
+        
+        self.on_lookup = on_lookup
+        self.on_log_qso = on_log_qso
+        self.on_mode_select = on_mode_select
+        self.on_menu_open = on_menu_open
+        self.on_time_edit = on_time_edit
+
+        self.fields = self.build_fields()
+        self.bottom_nav = [pygame.Rect(10, 138, 240, 25), pygame.Rect(255, 138, 25, 25), pygame.Rect(285, 138, 25, 25)]
+        self.bottom_focus = 0
+        self.is_auto_time = True
+        self.qso_datetime = None
+        self.active_pos = [0, 0]
+        self.main_grid_active = True
+        self.fields[0][0].active = True
+        self.clear_on_next_input = True
+        self.cursor_timer = 0
+        self.callsign_cache = set()
+
+    def build_fields(self):
+        sota_active = self.user_config.get("sota_mode", "0") == "1"
+        pota_active = self.user_config.get("pota_mode", "0") == "1"
+        contest_active = self.user_config.get("contest_mode", "0") == "1"
+        base_fields = [
+            [UIField(pygame.Rect(10, 23, 140, 25), get_string(self.lang, "callsign")), UIField(pygame.Rect(0, 0, 0, 0), "lookup", ""), UIField(pygame.Rect(170, 23, 140, 25), get_string(self.lang, "freq"), self.app_state["freq"])],
+            [UIField(pygame.Rect(10,63,65,25), get_string(self.lang, "rst_s"), "59"), UIField(pygame.Rect(85,63,65,25), get_string(self.lang, "rst_r"), "59"), UIField(pygame.Rect(170,63,140,25), get_string(self.lang, "mode"), self.app_state["mode"])]
+        ]
+        if sota_active:
+            base_fields.append([UIField(pygame.Rect(10,103,140,25), get_string(self.lang, "my_sota"), self.app_state.get("my_sota", "")), UIField(pygame.Rect(170,103,140,25), get_string(self.lang, "sota_ref"), self.app_state.get("sota_ref", ""))])
+        elif pota_active:
+            base_fields.append([UIField(pygame.Rect(10,103,140,25), get_string(self.lang, "my_pota"), self.app_state.get("my_pota", "")), UIField(pygame.Rect(170,103,140,25), get_string(self.lang, "pota_ref"), self.app_state.get("pota_ref", ""))])
+        elif contest_active:
+            base_fields.append([UIField(pygame.Rect(10,103,140,25), get_string(self.lang, "stx"), self.app_state.get("stx_string", "001")), UIField(pygame.Rect(170,103,140,25), get_string(self.lang, "srx"), self.app_state.get("srx_string", ""))])
+        base_fields.append([None, None, None]) # Dummy row
+        return base_fields
+
+    def update_fields(self):
+        old_extra_row = self.fields[2] if len(self.fields) > 3 else None
+        self.fields = self.build_fields()
+        if old_extra_row and len(self.fields) > 3:
+            if self.fields[2][0].label == old_extra_row[0].label:
+                self.fields[2][0].value = old_extra_row[0].value
+                self.fields[2][1].value = old_extra_row[1].value
+        
+        if self.main_grid_active and self.active_pos[0] >= len(self.fields) - 1:
+            self.active_pos[0] = len(self.fields) - 2
+            self.active_pos[1] = 0
+            for r in self.fields:
+                for f in r:
+                    if f: f.active = False
+            self.fields[self.active_pos[0]][self.active_pos[1]].active = True
+
+    def handle_event(self, event):
+        active_field = None
+        if self.main_grid_active:
+            current_row = self.fields[self.active_pos[0]]
+            if self.active_pos[1] < len(current_row):
+                active_field = current_row[self.active_pos[1]]
+
+        if event.key in (pygame.K_DOWN, pygame.K_UP, pygame.K_RIGHT, pygame.K_LEFT):
+            if active_field: active_field.active = False
+            self.clear_on_next_input = True
+            if self.main_grid_active:
+                max_row = len(self.fields) - 2
+                if event.key == pygame.K_DOWN and self.active_pos[0] == max_row: self.main_grid_active = False
+                else:
+                    if event.key == pygame.K_DOWN: self.active_pos[0]=min(max_row, self.active_pos[0]+1)
+                    elif event.key == pygame.K_UP: self.active_pos[0]=max(0, self.active_pos[0]-1)
+                    elif event.key == pygame.K_RIGHT: self.active_pos[1]+=1
+                    elif event.key == pygame.K_LEFT: self.active_pos[1]-=1
+                    row_len = len([f for f in self.fields[self.active_pos[0]] if f is not None])
+                    if row_len > 0:
+                        self.active_pos[1] = (self.active_pos[1] + row_len) % row_len
+                    else:
+                        self.active_pos[1] = 0
+            else:
+                max_row = len(self.fields) - 2
+                if event.key == pygame.K_UP: self.main_grid_active=True; self.active_pos=[max_row, min(self.bottom_focus, len([f for f in self.fields[max_row] if f is not None])-1)]
+                elif event.key == pygame.K_RIGHT: self.bottom_focus=(self.bottom_focus+1)%3
+                elif event.key == pygame.K_LEFT: self.bottom_focus=(self.bottom_focus-1+3)%3
+            
+            if self.main_grid_active:
+                current_row = self.fields[self.active_pos[0]]
+                if self.active_pos[1] < len(current_row) and current_row[self.active_pos[1]]:
+                    current_row[self.active_pos[1]].active = True
+            return "active"
+
+        elif event.key == pygame.K_RETURN:
+            if active_field and active_field.label == "lookup":
+                callsign_to_lookup = self.fields[0][0].value
+                if callsign_to_lookup:
+                    self.on_lookup(callsign_to_lookup.upper(), False)
+            elif active_field and active_field.label == get_string(self.lang, "callsign"):
+                call,freq,mode = self.fields[0][0].value,self.fields[0][2].value,self.fields[1][2].value
+                band = get_band_from_freq(freq)
+                if call and band != "N/A":
+                    my_sota, sota_ref, my_pota, pota_ref, stx_str, srx_str = "", "", "", "", "", ""
+                    if len(self.fields) > 3:
+                        if self.user_config.get("sota_mode", "0") == "1": my_sota, sota_ref = self.fields[2][0].value, self.fields[2][1].value
+                        elif self.user_config.get("pota_mode", "0") == "1": my_pota, pota_ref = self.fields[2][0].value, self.fields[2][1].value
+                        elif self.user_config.get("contest_mode", "0") == "1": stx_str, srx_str = self.fields[2][0].value, self.fields[2][1].value
+                    
+                    qso_data = {
+                        "call": call, "rst_s": self.fields[1][0].value, "rst_r": self.fields[1][1].value, "band": band, "mode": mode, "freq": freq, 
+                        "qso_datetime": self.qso_datetime, "my_sota": my_sota, "sota_ref": sota_ref, "my_pota": my_pota, "pota_ref": pota_ref, 
+                        "stx_str": stx_str, "srx_str": srx_str
+                    }
+                    self.on_log_qso(qso_data)
+                elif not call:
+                    self.on_lookup("", True) # clear cache
+            elif active_field and active_field.label == get_string(self.lang, "mode"): 
+                self.on_mode_select()
+            elif not self.main_grid_active:
+                if self.bottom_focus == 0: self.on_time_edit()
+                elif self.bottom_focus == 1: self.is_auto_time = not self.is_auto_time
+                elif self.bottom_focus == 2: self.on_menu_open()
+            return "active"
+            
+        elif event.key == pygame.K_BACKSPACE and active_field and active_field.label != "lookup": 
+            self.clear_on_next_input=False
+            active_field.value=active_field.value[:-1]
+            return "active"
+            
+        elif active_field and active_field.label != "lookup" and event.unicode.isprintable():
+            if self.clear_on_next_input: active_field.value, self.clear_on_next_input = "", False
+            if active_field.label == get_string(self.lang, "callsign"):
+                active_field.value += event.unicode.upper()
+            elif active_field.label == get_string(self.lang, "freq"):
+                val,char=active_field.value,event.unicode
+                if char.isdigit():
+                    if '.' in val and len(val.split('.')[1])>=6: pass
+                    elif ',' in val and len(val.split(',')[1])>=6: pass
+                    else: active_field.value+=char
+                elif char in '.,' and '.' not in val and ',' not in val: active_field.value+=char
+            elif active_field.label in [get_string(self.lang, "rst_s"), get_string(self.lang, "rst_r")]:
+                if event.unicode.isdigit() and len(active_field.value)<2: active_field.value+=event.unicode
+            else: active_field.value+=event.unicode.upper()
+            return "active"
+
+        return None
+
+    def draw(self, screen):
+        self.cursor_timer += 1
+        screen.fill(self.theme.bg_color)
+        lookup_icon_active = self.main_grid_active and self.active_pos == [0, 1]
+        
+        for r_idx, r in enumerate(self.fields):
+            if r_idx == len(self.fields) - 1: continue
+            for f_idx, f in enumerate(r):
+                if f:
+                    if f.label == "lookup": continue
+
+                    # 1. Draw labels and decorations
+                    if f.label == get_string(self.lang, "freq"):
+                        band_val = get_band_from_freq(f.value)
+                        display_label = f"{f.label} [{band_val}]" if band_val and band_val != "N/A" else f.label
+                        l_surf = self.small_font.render(display_label, True, self.theme.text_color)
+                        screen.blit(l_surf, (f.rect.x, f.rect.y-14))
+                    elif f.label == get_string(self.lang, "callsign"):
+                        l_surf = self.small_font.render(f.label, True, self.theme.text_color)
+                        screen.blit(l_surf, (f.rect.x, f.rect.y-14))
+                        
+                        lookup_icon_rect = pygame.Rect(f.rect.x + l_surf.get_width() + 5, f.rect.y - 14, 20, 14)
+                        icon_color = self.theme.highlight_color if lookup_icon_active else self.theme.text_color
+                        lookup_surf = self.small_font.render("󰍉", True, icon_color)
+                        screen.blit(lookup_surf, lookup_icon_rect)
+                        if lookup_icon_active:
+                            pygame.draw.rect(screen, self.theme.highlight_color, lookup_icon_rect.inflate(4,4), 1, border_radius=3)
+
+                        current_flag_surf = get_flag_surface(f.value, self.flag_sprite_sheet)
+                        if current_flag_surf:
+                            screen.blit(current_flag_surf, (lookup_icon_rect.right + 5, f.rect.y - 14))
+                    else:
+                        l_surf = self.small_font.render(f.label, True, self.theme.text_color)
+                        screen.blit(l_surf, (f.rect.x, f.rect.y-14))
+
+                    # 2. Draw field boxes and values
+                    b_color = self.theme.highlight_color if f.active else self.theme.box_color
+                    pygame.draw.rect(screen, b_color, f.rect, 2, border_radius=3)
+                    
+                    final_color = self.theme.text_color
+                    if f.label == get_string(self.lang, "callsign"):
+                        if f.value and f.value.upper() in self.callsign_cache:
+                            final_color = self.theme.dupe_color
+                        elif f.value and f.active:
+                            final_color = self.theme.typing_color
+                    
+                    v_surf = self.font.render(f.value, True, final_color)
+                    
+                    text_render_rect = f.rect.inflate(-10, 0)
+                    text_y = f.rect.centery - v_surf.get_height() // 2
+
+                    if v_surf.get_width() > text_render_rect.width:
+                        x_offset = text_render_rect.width - v_surf.get_width()
+                        screen.set_clip(text_render_rect)
+                        screen.blit(v_surf, (text_render_rect.x + x_offset, text_y))
+                        screen.set_clip(None)
+                        cursor_x = text_render_rect.right
+                    else:
+                        screen.blit(v_surf, (text_render_rect.x, text_y))
+                        cursor_x = text_render_rect.x + v_surf.get_width()
+
+                    if f.active and self.cursor_timer % 60 < 30:
+                        pygame.draw.line(screen, self.theme.text_color, (cursor_x, f.rect.y + 5), (cursor_x, f.rect.bottom - 5), 2)
+
+        
+        time_b_color = self.theme.highlight_color if not self.main_grid_active and self.bottom_focus==0 else self.theme.box_color
+        auto_b_color = self.theme.highlight_color if not self.main_grid_active and self.bottom_focus==1 else self.theme.box_color
+        menu_b_color = self.theme.highlight_color if not self.main_grid_active and self.bottom_focus==2 else self.theme.box_color
+        pygame.draw.rect(screen, time_b_color, self.bottom_nav[0], 2, border_radius=3)
+        pygame.draw.rect(screen, auto_b_color, self.bottom_nav[1], 2, border_radius=3)
+        pygame.draw.rect(screen, menu_b_color, self.bottom_nav[2], 2, border_radius=3)
+        time_str = self.qso_datetime.strftime("%Y-%m-%d %H:%M:%S UTC") if isinstance(self.qso_datetime, datetime) else "AUTO"
+        time_surf = self.small_font.render(time_str, True, self.theme.text_color); screen.blit(time_surf, (self.bottom_nav[0].x+10, self.bottom_nav[0].centery - time_surf.get_height()//2))
+        
+        auto_icon_color = self.theme.highlight_color if self.is_auto_time else self.theme.text_color
+        auto_surf = self.font.render("◷", True, auto_icon_color)
+        screen.blit(auto_surf, (self.bottom_nav[1].centerx - auto_surf.get_width()//2, self.bottom_nav[1].centery - auto_surf.get_height()//2 - 2))
+        
+        menu_surf = self.font.render("≡", True, self.theme.text_color)
+        screen.blit(menu_surf, (self.bottom_nav[2].centerx - menu_surf.get_width()//2, self.bottom_nav[2].centery - menu_surf.get_height()//2))
 
 class DateSelector:
     def __init__(self, dt, font, small_font, theme):
