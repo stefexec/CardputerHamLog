@@ -1,6 +1,5 @@
 import pygame
 import os
-from datetime import datetime
 from flag_utils import get_flag_surface
 from language import get_string
 
@@ -222,6 +221,54 @@ class SettingsMenu(MenuBase):
         title = get_string(lang, "settings_categories")
         super().__init__(font, small_font, theme, lang, title, items, flag_sprite_sheet)
 
+class TextInputPopup:
+    def __init__(self, font, small_font, theme, initial_text, title):
+        self.font = font
+        self.small_font = small_font
+        self.theme = theme
+        self.text = str(initial_text) if initial_text else ""
+        self.title = title
+        self.rect = pygame.Rect(10, 35, 300, 100)
+        self.cursor_timer = 0
+        
+    def handle_event(self, event):
+        if event.key == pygame.K_RETURN:
+            return self.text
+        if event.key == pygame.K_ESCAPE:
+            return "cancel"
+        if event.key == pygame.K_BACKSPACE:
+            self.text = self.text[:-1]
+        elif event.unicode.isprintable():
+            self.text += event.unicode
+        return None
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.theme.popup_bg_color, self.rect, border_radius=5)
+        pygame.draw.rect(screen, self.theme.popup_border_color, self.rect, 2, border_radius=5)
+        
+        title_surf = self.small_font.render(self.title, True, self.theme.text_color)
+        screen.blit(title_surf, (self.rect.centerx - title_surf.get_width()//2, self.rect.y + 10))
+        
+        text_rect = pygame.Rect(self.rect.x + 10, self.rect.y + 40, self.rect.width - 20, 30)
+        pygame.draw.rect(screen, self.theme.box_color, text_rect, border_radius=3)
+        pygame.draw.rect(screen, self.theme.highlight_color, text_rect, 2, border_radius=3)
+        
+        text_surf = self.small_font.render(self.text, True, self.theme.text_color)
+        
+        if text_surf.get_width() > text_rect.width - 10:
+            x_offset = text_rect.width - 10 - text_surf.get_width()
+            screen.set_clip(text_rect)
+            screen.blit(text_surf, (text_rect.x + 5 + x_offset, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
+            screen.set_clip(None)
+            cursor_x = text_rect.right - 5
+        else:
+            screen.blit(text_surf, (text_rect.x + 5, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
+            cursor_x = text_rect.x + 5 + text_surf.get_width()
+            
+        self.cursor_timer += 1
+        if self.cursor_timer % 60 < 30:
+            pygame.draw.line(screen, self.theme.text_color, (cursor_x, text_rect.y + 5), (cursor_x, text_rect.bottom - 5), 2)
+
 class SettingsScreenBase:
     def __init__(self, user_config, font, small_font, title, settings, buttons=None, flag_sprite_sheet=None, theme=None):
         self.user_config = user_config
@@ -239,8 +286,17 @@ class SettingsScreenBase:
         self.scroll_offset = 0
         self.max_visible_items = 4
         self.rect = pygame.Rect(10, 10, 300, 150)
+        self.popup = None
         
     def handle_event(self, event):
+        if getattr(self, 'popup', None) is not None:
+            res = self.popup.handle_event(event)
+            if res is not None:
+                if res != "cancel":
+                    self.settings[self.active_setting]["value"] = res
+                self.popup = None
+            return "active"
+
         if event.key == pygame.K_ESCAPE: 
             return {s["key"]: s["value"] for s in self.settings}
         
@@ -295,6 +351,8 @@ class SettingsScreenBase:
                     current_index = setting["options"].index(setting["value"])
                     next_index = (current_index + 1) % len(setting["options"])
                     setting["value"] = setting["options"][next_index]
+                elif setting["type"] == "path":
+                    self.popup = TextInputPopup(self.font, self.small_font, self.theme, setting["value"], setting["label"])
                 else:
                     self.edit_mode = True
             
@@ -327,10 +385,10 @@ class SettingsScreenBase:
             label_y = y + (24 - label_surf.get_height()) // 2
             screen.blit(label_surf, (label_x, label_y))
             
-            value_x_pos = self.rect.x + 125
-            value_width = self.rect.width - 145
+            value_x_pos = self.rect.x + 105
+            value_width = self.rect.width - 125
             if len(self.settings) > self.max_visible_items:
-                value_width = self.rect.width - 155
+                value_width = self.rect.width - 135
 
             if setting["type"] == "checkbox":
                 cb_surf = self.font.render("☑" if setting["value"] == "1" else "☐", True, self.theme.text_color)
@@ -340,7 +398,7 @@ class SettingsScreenBase:
                 border_color = self.theme.highlight_color if actual_index == self.active_setting else color
                 pygame.draw.rect(screen, border_color, value_rect, 2, border_radius=3)
                 
-                value_surf = self.small_font.render(setting["value"], True, self.theme.text_color)
+                value_surf = self.small_font.render(str(setting["value"]), True, self.theme.text_color)
                 text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
                 screen.blit(value_surf, (value_rect.x + 5, text_y))
             else:
@@ -348,13 +406,31 @@ class SettingsScreenBase:
                 border_color = self.theme.highlight_color if actual_index == self.active_setting and self.edit_mode else color
                 pygame.draw.rect(screen, border_color, value_rect, 2, border_radius=3)
                 
-                display_value = setting["value"]
+                display_value = str(setting["value"])
                 if setting["type"] == "password" and not self.edit_mode:
-                    display_value = "*" * len(setting["value"])
+                    display_value = "*" * len(display_value)
+                elif setting["type"] == "path":
+                    filename = os.path.basename(display_value) if display_value else ""
+                    if not filename and display_value:
+                        filename = os.path.basename(display_value.rstrip('/\\'))
+                    if not filename:
+                        filename = display_value
+                    
+                    if display_value and display_value != filename:
+                        display_value = ".../" + filename
+                    else:
+                        display_value = filename
 
                 value_surf = self.small_font.render(display_value, True, self.theme.text_color)
-                text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
-                screen.blit(value_surf, (value_rect.x + 5, text_y))
+                
+                if value_surf.get_width() > value_width - 10:
+                    screen.set_clip(value_rect)
+                    text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
+                    screen.blit(value_surf, (value_rect.x + 5, text_y))
+                    screen.set_clip(None)
+                else:
+                    text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
+                    screen.blit(value_surf, (value_rect.x + 5, text_y))
             
             y += 28 
             
@@ -377,6 +453,9 @@ class SettingsScreenBase:
             handle_y = track.y+(track_h-handle_h)*scroll_perc
             handle = pygame.Rect(track.x, handle_y, 7, handle_h)
             pygame.draw.rect(screen, self.theme.scrollbar_handle_color, handle, border_radius=3)
+            
+        if getattr(self, 'popup', None) is not None:
+            self.popup.draw(screen)
 
 class LogSettingsScreen(SettingsScreenBase):
     def __init__(self, user_config, font, small_font, theme):
@@ -470,7 +549,7 @@ class ExportSettingsScreen(SettingsScreenBase):
     def __init__(self, user_config, font, small_font, theme):
         lang = user_config.get("language", "en")
         settings = [
-            {"key": "logfile", "label": get_string(lang, "log_file"), "value": user_config.get("logfile", ""), "type": "text"},
+            {"key": "logfile", "label": get_string(lang, "log_file"), "value": user_config.get("logfile", ""), "type": "path"},
         ]
         buttons = [
             {"label": get_string(lang, "export_today"), "action": "export_today"},
