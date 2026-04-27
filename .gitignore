@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env
+
+# IDE / Editor specific
+.vscode/
+.idea/
+.testing/
+
+# Application specific
+# Ignore configuration files that may contain secrets or local state.
+config/
+secret.key
+
+# Ignore generated log files and exports.
+logs/
+
+# OS specific
+.DS_Store
+Thumbs.db
