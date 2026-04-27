@@ -243,6 +243,7 @@ class TextInputPopup:
         return None
 
     def draw(self, screen):
+        self.cursor_timer += 1
         pygame.draw.rect(screen, self.theme.popup_bg_color, self.rect, border_radius=5)
         pygame.draw.rect(screen, self.theme.popup_border_color, self.rect, 2, border_radius=5)
         
@@ -255,17 +256,18 @@ class TextInputPopup:
         
         text_surf = self.small_font.render(self.text, True, self.theme.text_color)
         
-        if text_surf.get_width() > text_rect.width - 10:
-            x_offset = text_rect.width - 10 - text_surf.get_width()
-            screen.set_clip(text_rect)
-            screen.blit(text_surf, (text_rect.x + 5 + x_offset, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
+        text_render_rect = text_rect.inflate(-10, 0)
+        
+        if text_surf.get_width() > text_render_rect.width:
+            x_offset = text_render_rect.width - text_surf.get_width()
+            screen.set_clip(text_render_rect)
+            screen.blit(text_surf, (text_render_rect.x + x_offset, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
             screen.set_clip(None)
-            cursor_x = text_rect.right - 5
+            cursor_x = text_render_rect.right
         else:
-            screen.blit(text_surf, (text_rect.x + 5, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
-            cursor_x = text_rect.x + 5 + text_surf.get_width()
+            screen.blit(text_surf, (text_render_rect.x, text_rect.y + (text_rect.height - text_surf.get_height()) // 2))
+            cursor_x = text_render_rect.x + text_surf.get_width()
             
-        self.cursor_timer += 1
         if self.cursor_timer % 60 < 30:
             pygame.draw.line(screen, self.theme.text_color, (cursor_x, text_rect.y + 5), (cursor_x, text_rect.bottom - 5), 2)
 
@@ -287,6 +289,7 @@ class SettingsScreenBase:
         self.max_visible_items = 4
         self.rect = pygame.Rect(10, 10, 300, 150)
         self.popup = None
+        self.cursor_timer = 0
         
     def handle_event(self, event):
         if getattr(self, 'popup', None) is not None:
@@ -364,6 +367,7 @@ class SettingsScreenBase:
         return "active"
         
     def draw(self, screen):
+        self.cursor_timer += 1
         screen.fill(self.theme.bg_color)
         title_surf = self.font.render(self.title, True, self.theme.text_color)
         screen.blit(title_surf, (self.rect.centerx - title_surf.get_width()//2, self.rect.y + 5))
@@ -403,11 +407,14 @@ class SettingsScreenBase:
                 screen.blit(value_surf, (value_rect.x + 5, text_y))
             else:
                 value_rect = pygame.Rect(value_x_pos, y, value_width, 24)
-                border_color = self.theme.highlight_color if actual_index == self.active_setting and self.edit_mode else color
+                is_active_setting = actual_index == self.active_setting and not self.focus_on_buttons
+                is_editing = is_active_setting and self.edit_mode
+
+                border_color = self.theme.highlight_color if is_active_setting else self.theme.box_color
                 pygame.draw.rect(screen, border_color, value_rect, 2, border_radius=3)
                 
                 display_value = str(setting["value"])
-                if setting["type"] == "password" and not self.edit_mode:
+                if setting["type"] == "password" and not is_editing:
                     display_value = "*" * len(display_value)
                 elif setting["type"] == "path":
                     filename = os.path.basename(display_value) if display_value else ""
@@ -422,15 +429,22 @@ class SettingsScreenBase:
                         display_value = filename
 
                 value_surf = self.small_font.render(display_value, True, self.theme.text_color)
+                text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
                 
-                if value_surf.get_width() > value_width - 10:
-                    screen.set_clip(value_rect)
-                    text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
-                    screen.blit(value_surf, (value_rect.x + 5, text_y))
+                text_render_rect = value_rect.inflate(-10, 0)
+
+                if value_surf.get_width() > text_render_rect.width:
+                    x_offset = text_render_rect.width - value_surf.get_width()
+                    screen.set_clip(text_render_rect)
+                    screen.blit(value_surf, (text_render_rect.x + x_offset, text_y))
                     screen.set_clip(None)
+                    cursor_x = text_render_rect.right
                 else:
-                    text_y = value_rect.y + (value_rect.height - value_surf.get_height()) // 2
-                    screen.blit(value_surf, (value_rect.x + 5, text_y))
+                    screen.blit(value_surf, (text_render_rect.x, text_y))
+                    cursor_x = text_render_rect.x + value_surf.get_width()
+
+                if is_editing and self.cursor_timer % 60 < 30:
+                    pygame.draw.line(screen, self.theme.text_color, (cursor_x, value_rect.y + 5), (cursor_x, value_rect.bottom - 5), 2)
             
             y += 28 
             

@@ -83,6 +83,7 @@ def main():
     lookup_thread, lookup_result = None, None
     lookup_active = False
     pending_qso_data = None
+    cursor_timer = 0
 
     def show_popup(message, duration=2):
         nonlocal show_log_popup, popup_end_time, popup_message
@@ -139,6 +140,7 @@ def main():
 
     running = True
     while running:
+        cursor_timer += 1
         if is_auto_time and not isinstance(qso_datetime, str): qso_datetime = datetime.now(timezone.utc)
         
         active_field = None
@@ -385,17 +387,32 @@ def main():
 
                         # 2. Draw field boxes and values
                         b_color = theme.highlight_color if f.active else theme.box_color
+                        pygame.draw.rect(screen, b_color, f.rect, 2, border_radius=3)
                         
                         final_color = theme.text_color
                         if f.label == get_string(lang, "callsign"):
                             if f.value and f.value.upper() in callsign_cache:
                                 final_color = theme.dupe_color
-                            elif f.value:
+                            elif f.value and f.active:
                                 final_color = theme.typing_color
                         
                         v_surf = font.render(f.value, True, final_color)
-                        pygame.draw.rect(screen, b_color, f.rect, 2, border_radius=3)
-                        screen.blit(v_surf, (f.rect.x+5, f.rect.y+3))
+                        
+                        text_render_rect = f.rect.inflate(-10, 0)
+                        text_y = f.rect.centery - v_surf.get_height() // 2
+
+                        if v_surf.get_width() > text_render_rect.width:
+                            x_offset = text_render_rect.width - v_surf.get_width()
+                            screen.set_clip(text_render_rect)
+                            screen.blit(v_surf, (text_render_rect.x + x_offset, text_y))
+                            screen.set_clip(None)
+                            cursor_x = text_render_rect.right
+                        else:
+                            screen.blit(v_surf, (text_render_rect.x, text_y))
+                            cursor_x = text_render_rect.x + v_surf.get_width()
+
+                        if f.active and cursor_timer % 60 < 30:
+                            pygame.draw.line(screen, theme.text_color, (cursor_x, f.rect.y + 5), (cursor_x, f.rect.bottom - 5), 2)
 
             
             time_b_color = theme.highlight_color if not main_grid_active and bottom_focus==0 else theme.box_color
