@@ -71,6 +71,8 @@ def main():
 
         if lookup_active:
             return
+        
+        lookup_result = None
         lookup_active = True
         show_popup(get_string(lang, "fetching_info"), duration=10)
         def lookup_worker():
@@ -88,7 +90,6 @@ def main():
     def log_qso_and_reset(qso_data):
         nonlocal callsign_cache, main_screen, pending_qso_data
         
-        # Check auto-lookup first
         call = qso_data["call"]
         if user_config.get("lookup_auto", "0") == "1" and call.upper() not in lookup_data_cache:
             pending_qso_data = qso_data
@@ -97,14 +98,22 @@ def main():
             
         logger = ADIFLogger(user_config)
         
-        extra_data = lookup_data_cache.get(call.upper(), {})
+        extra_data = lookup_data_cache.get(call.upper()) or {}
+        if not isinstance(extra_data, dict):
+            extra_data = {}
+
+        log_kwargs = {}
+        if extra_data.get('name'): log_kwargs['NAME'] = extra_data.get('name')
+        if extra_data.get('addr2'): log_kwargs['QTH'] = extra_data.get('addr2')
+        if extra_data.get('grid'): log_kwargs['GRIDSQUARE'] = extra_data.get('grid')
+
         logger.log_qso(
             call.upper(), qso_data["rst_s"], qso_data["rst_r"], qso_data["band"], qso_data["mode"], 
             freq=qso_data["freq"], qso_datetime=qso_data["qso_datetime"], 
             my_sota_ref=qso_data["my_sota"], sota_ref=qso_data["sota_ref"], 
             my_pota_ref=qso_data["my_pota"], pota_ref=qso_data["pota_ref"], 
             stx_string=qso_data["stx_str"], srx_string=qso_data["srx_str"], 
-            NAME=extra_data.get('name'), QTH=extra_data.get('addr2'), GRIDSQUARE=extra_data.get('grid')
+            **log_kwargs
         )
         callsign_cache.add(call.upper())
         main_screen.callsign_cache = callsign_cache
@@ -148,7 +157,12 @@ def main():
             lookup_thread = None
             
             callsign_key = pending_qso_data["call"].upper() if pending_qso_data else main_screen.fields[0][0].value.upper()
-            lookup_data_cache[callsign_key] = lookup_result
+            
+            if lookup_result is None:
+                if callsign_key in lookup_data_cache:
+                    del lookup_data_cache[callsign_key]
+            else:
+                lookup_data_cache[callsign_key] = lookup_result
 
             if pending_qso_data:
                 log_qso_and_reset(pending_qso_data)

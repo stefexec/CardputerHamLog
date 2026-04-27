@@ -18,8 +18,8 @@ class ADIFLogger:
     def _ensure_header(self):
         if not os.path.exists(self.filename):
             with open(self.filename, 'w') as f:
-                f.write(f"Cardputer Zero Ham Log - Station {self.station_callsign}\\n")
-                f.write("<EOH>\\n")
+                f.write(f"Cardputer Zero Ham Log - Station {self.station_callsign}\n")
+                f.write("<EOH>\n")
 
     def sort_log_file(self):
         with open(self.filename, 'r') as f:
@@ -39,18 +39,45 @@ class ADIFLogger:
         def get_qso_datetime(record_line):
             date_str = ""
             time_str = ""
-            if "<QSO_DATE:" in record_line:
-                start = record_line.find("<QSO_DATE:")
-                end = record_line.find(">", start)
-                date_str = record_line[end+1 : end+1+8]
-            if "<TIME_ON:" in record_line:
-                start = record_line.find("<TIME_ON:")
-                end = record_line.find(">", start)
-                time_str = record_line[end+1 : end+1+4]
-            
+
+            # --- QSO_DATE ---
+            tag = "<QSO_DATE:"
+            start_idx = record_line.find(tag)
+            if start_idx != -1:
+                len_start = start_idx + len(tag)
+                len_end = record_line.find(">", len_start)
+                if len_end != -1:
+                    try:
+                        length = int(record_line[len_start:len_end])
+                        val_start = len_end + 1
+                        date_str = record_line[val_start : val_start + length]
+                    except (ValueError, IndexError):
+                        pass # Malformed tag
+
+            # --- TIME_ON ---
+            tag = "<TIME_ON:"
+            start_idx = record_line.find(tag)
+            if start_idx != -1:
+                len_start = start_idx + len(tag)
+                len_end = record_line.find(">", len_start)
+                if len_end != -1:
+                    try:
+                        length = int(record_line[len_start:len_end])
+                        val_start = len_end + 1
+                        time_str = record_line[val_start : val_start + length]
+                    except (ValueError, IndexError):
+                        pass # Malformed tag
+
             if date_str and time_str:
-                return datetime.strptime(date_str + time_str, "%Y%m%d%H%M")
-            return datetime.min # Should not happen for valid records
+                try:
+                    if len(time_str) == 4:
+                        return datetime.strptime(date_str + time_str, "%Y%m%d%H%M")
+                    elif len(time_str) == 6:
+                        return datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+                except ValueError:
+                    return datetime.min # Parsing failed for date/time format
+            
+            return datetime.min # One of the tags was not found
 
         sorted_records = sorted(records, key=get_qso_datetime)
 
@@ -117,10 +144,10 @@ class ADIFLogger:
                 v_str = str(v)
                 adif_record += f"<{k}:{len(v_str)}>{v_str} "
 
-        adif_record += "<EOR>\\n"
+        adif_record += "<EOR>\n"
 
         with open(self.filename, 'a') as f: f.write(adif_record)
-        self.sort_log_file()
+        self.sort_log_file() # This was causing the overwrite issue
         print(f"[+] Logged: {call} on {band} ({freq} MHz) at {date_str} {time_str}")
 
 # --- Hilfsfunktionen ---

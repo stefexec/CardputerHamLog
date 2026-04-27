@@ -955,7 +955,8 @@ class LogViewer:
             if ":" in p:
                 tag, rest = p.split(":", 1)
                 if ">" in rest:
-                    val = rest.split(">")[1].strip()
+                    end_tag_pos = rest.find(">")
+                    val = rest[end_tag_pos+1:].split("<")[0].strip()
                     data[tag] = val
         return data
 
