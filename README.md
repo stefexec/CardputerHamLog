@@ -11,10 +11,12 @@ This project is currently in a pre-release, development phase, primarily targeti
 
 ---
 
-## Screenshot
+## Screenshots
 
 <p align="center">
   <img src="assets/1.png" alt="CardputerHamLog Screenshot" width="300"/>
+  <img src="assets/2.png" alt="CardputerHamLog Screenshot" width="300"/>
+  <img src="assets/3.png" alt="CardputerHamLog Screenshot" width="300"/>
 </p>
 
 ---
