@@ -7,12 +7,12 @@ Portal: <https://dev.cardputer.cc/#/upload>
 
 ## Package
 
-- Debian package path: `build/hamradiolog_0.1-m5stack1_arm64.deb`
-- Package: `hamradiolog`
+- Debian package path: `build/hamlog_0.1-m5stack1_arm64.deb`
+- Package: `hamlog`
 - Version: `0.1`
 - Architecture: `arm64`
 - Maintainer: `Stefan <dev@example.com>`
-- APPLaunch desktop path: `/usr/share/APPLaunch/applications/hamradiolog.desktop`
+- APPLaunch desktop path: `/usr/share/APPLaunch/applications/hamlog.desktop`
 - Executable path: `/usr/share/APPLaunch/bin/run.sh`
 
 ## Source and Ownership
@@ -23,8 +23,8 @@ Portal: <https://dev.cardputer.cc/#/upload>
 
 ## Listing
 
-- Application name: `Ham Radio Log`
-- One-line summary (maximum 80 characters): `Ham Radio Log for Cardputer Zero`
+- Application name: `HamLog`
+- One-line summary (maximum 80 characters): `HamLog for Cardputer Zero`
 - Description: `Ham Radio logger with ADIF export and Call lookup`
 - Categories (maximum 6): `Radio & Comms`
 
