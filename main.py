@@ -176,6 +176,13 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F12:
+                    idx = 1
+                    while os.path.exists(f"./assets/{idx}.png"):
+                        idx += 1
+                    pygame.image.save(screen, f"./assets/{idx}.png")
+                    show_popup(f"Saved: {idx}.png", duration=2)
+                    continue
                 if lookup_screen:
                     res = lookup_screen.handle_event(event)
                     if res != "active":

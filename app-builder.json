@@ -1,0 +1,27 @@
+{
+  "package_name": "hamradiolog",
+  "version": "0.1",
+  "app_name": "Ham Radio Log",
+  "bin_name": "run.sh",
+  "description": "Ham Radio logger with ADIF export and Call lookup",
+  "store": {
+    "summary": "Ham Radio Log for Cardputer Zero",
+    "description": "Ham Radio logger with ADIF export and Call lookup",
+    "categories": ["Radio & Comms"],
+    "screenshots": ["assets/1.png", "assets/2.png", "assets/3.png", "assets/4.png"],
+    "icon": "assets/icon.png",
+    "license": "MIT",
+    "source_repo": "https://github.com/stefexec/HamRadioLog",
+    "author": { "github": "stefexec", "display_name": "Stefan" },
+    "share_code": "HAML",
+    "permissions": {
+      "camera": false,
+      "microphone": false,
+      "imu": false,
+      "network": true,
+      "additional_hardware": false,
+      "background_service": false,
+      "external_display": false
+    }
+  }
+}
