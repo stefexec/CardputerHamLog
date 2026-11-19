@@ -7,54 +7,52 @@ Portal: <https://dev.cardputer.cc/#/upload>
 
 ## Package
 
-- Debian package path: `build/hamlog_0.1-m5stack1_arm64.deb`
+- Debian package path: `build/hamlog_0.1.1_arm64.deb`
 - Package: `hamlog`
-- Version: `0.1`
+- Version: `0.1.1`
 - Architecture: `arm64`
-- Maintainer: `Stefan <dev@example.com>`
+- Maintainer: `Stefan <stefan@gurk.dev>`
 - APPLaunch desktop path: `/usr/share/APPLaunch/applications/hamlog.desktop`
-- Executable path: `/usr/share/APPLaunch/bin/run.sh`
+- Executable path: `/usr/share/APPLaunch/bin/hamlog`
 
 ## Source and Ownership
 
-- Public source repository: `https://github.com/stefexec/HamRadioLog`
+- Public source repository: `https://github.com/stefexec/CardputerHamLog`
 - Expected GitHub uploader/owner: `stefexec`
 - Hide uploader email: `true`
 
 ## Listing
 
 - Application name: `HamLog`
-- One-line summary (maximum 80 characters): `HamLog for Cardputer Zero`
-- Description: `Ham Radio logger with ADIF export and Call lookup`
+- One-line summary (maximum 80 characters): `Ham Radio Log for Cardputer Zero`
+- Description: `Portable Ham Radio QSO logger for Cardputer Zero with ADIF export, band statistics, multi-language UI, country flags, and HamDB/QRZ callsign lookup.`
 - Categories (maximum 6): `Radio & Comms`
 
 ## Assets
 
-- 256 x 256 source icon: `assets/icon.png`
-- Icon packaged in `.deb`: `share/images/icon.png`
+- 256 x 256 source icon: `assets/hamlog.png`
+- Icon packaged in `.deb`: `share/images/hamlog.png`
 - Screenshot 1 (320 x 170): `assets/1.png`
 - Screenshot 2 (320 x 170): `assets/2.png`
 - Screenshot 3 (320 x 170): `assets/3.png`
 - Screenshot 4 (320 x 170): `assets/4.png`
-- Optional screenshot 5 (portal supports up to 6): TODO
-- Optional screenshot 6 (portal supports up to 6): TODO
 
 ## Preflight
 
-- [ ] `.deb` exists and can be parsed.
-- [ ] Control fields contain Package, Version, Architecture, and Maintainer.
-- [ ] Architecture is appropriate for the package (`arm64` for native binaries).
-- [ ] APPLaunch `.desktop`, executable, and PNG icon exist inside the package.
-- [ ] Package name ownership and update version are valid.
-- [ ] Listing copy and categories have been reviewed.
-- [ ] Four clean 320 x 170 baseline screenshots exist.
-- [ ] No credentials, tokens, or private server details are embedded.
-- [ ] The user explicitly approved external submission.
+- [x] `.deb` exists and can be parsed.
+- [x] Control fields contain Package, Version, Architecture, and Maintainer.
+- [x] Architecture is appropriate for the package (`arm64`).
+- [x] APPLaunch `.desktop`, executable, and PNG icon exist inside the package.
+- [x] Package name ownership and update version are valid.
+- [x] Listing copy and categories have been reviewed.
+- [x] Four clean 320 x 170 baseline screenshots exist.
+- [x] No credentials, tokens, or private server details are embedded.
+- [x] The user explicitly approved external submission.
 
 ## Submission Result
 
-- Status: `not submitted`
-- Submitted at: TODO
-- Portal message: TODO
-- Actions URL: TODO
-- Tracking or pull-request URL: TODO
+- Status: `submitted`
+- Submitted at: `2026-11-19T23:54:13Z`
+- Validation result: `Package Validation Passed (2/2 checks passing; awaiting maintainer merge after device demo video review)`
+- Release URL: <https://github.com/stefexec/CardputerHamLog/releases/tag/v0.1.1>
+- Tracking or pull-request URL: <https://github.com/CardputerZero/packages/pull/526>
