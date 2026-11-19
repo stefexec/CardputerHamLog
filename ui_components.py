@@ -2,7 +2,7 @@ import pygame
 import os
 from flag_utils import get_flag_surface
 from language import get_string
-from logger import get_band_from_freq
+from logger import delete_qso_record, get_band_from_freq, update_qso_record
 from datetime import datetime
 
 def draw_callsign_and_flag(screen, font, callsign, color, center_x, y, flag_sprite_sheet):
@@ -543,6 +543,10 @@ class SettingsScreenBase:
         self.edit_mode = False
         self.scroll_offset = 0
         self.max_visible_items = 4
+        self.row_start_offset = 35
+        self.row_step = 28
+        self.button_height = 30
+        self.button_bottom_margin = 40
         self.rect = pygame.Rect(10, 10, 300, 150)
         self.popup = None
         self.cursor_timer = 0
@@ -628,7 +632,7 @@ class SettingsScreenBase:
         title_surf = self.font.render(self.title, True, self.theme.text_color)
         screen.blit(title_surf, (self.rect.centerx - title_surf.get_width()//2, self.rect.y + 5))
         
-        y = self.rect.y + 35
+        y = self.rect.y + self.row_start_offset
         for i, setting in enumerate(self.settings[self.scroll_offset:self.scroll_offset+self.max_visible_items]):
             actual_index = self.scroll_offset + i
             color = self.theme.highlight_color if actual_index == self.active_setting and not self.focus_on_buttons else self.theme.box_color
@@ -702,21 +706,22 @@ class SettingsScreenBase:
                 if is_editing and self.cursor_timer % 60 < 30:
                     pygame.draw.line(screen, self.theme.text_color, (cursor_x, value_rect.y + 5), (cursor_x, value_rect.bottom - 5), 2)
             
-            y += 28 
+            y += self.row_step
             
         if self.buttons:
-            button_y = self.rect.bottom - 40
+            button_y = self.rect.bottom - self.button_bottom_margin
             button_width = (self.rect.width - (len(self.buttons) + 1) * 10) / len(self.buttons)
             for i, button in enumerate(self.buttons):
-                button_rect = pygame.Rect(self.rect.x + 10 + i * (button_width + 10), button_y, button_width, 30)
+                button_rect = pygame.Rect(self.rect.x + 10 + i * (button_width + 10), button_y, button_width, self.button_height)
                 color = self.theme.highlight_color if i == self.active_button and self.focus_on_buttons else self.theme.box_color
                 pygame.draw.rect(screen, color, button_rect, 2, border_radius=5)
                 label_surf = self.small_font.render(button["label"], True, color)
                 screen.blit(label_surf, (button_rect.centerx - label_surf.get_width()//2, button_rect.centery - label_surf.get_height()//2))
 
         if len(self.settings) > self.max_visible_items:
-            track_h = self.rect.height-30
-            track = pygame.Rect(self.rect.right-12, self.rect.top+25, 7, track_h)
+            track_top = self.rect.y + self.row_start_offset if self.buttons else self.rect.top + 25
+            track_h = self.max_visible_items * self.row_step - 2 if self.buttons else self.rect.height - 30
+            track = pygame.Rect(self.rect.right-12, track_top, 7, track_h)
             pygame.draw.rect(screen, self.theme.scrollbar_track_color, track, border_radius=3)
             handle_h = max(10, track_h*(self.max_visible_items/len(self.settings)))
             scroll_perc = self.scroll_offset/(len(self.settings)-self.max_visible_items) if len(self.settings) > self.max_visible_items else 0
@@ -956,18 +961,153 @@ class BandDistributionScreen:
             y += total_bar_height
             color_index += 1
 
+_QSO_CORE_FIELDS = (
+    ("CALL", "callsign", "text"),
+    ("FREQ", "freq", "text"),
+    ("MODE", "mode", "mode"),
+    ("RST_SENT", "rst_s", "text"),
+    ("RST_RCVD", "rst_r", "text"),
+    ("QSO_DATE", "date", "text"),
+    ("TIME_ON", "time", "text"),
+    ("BAND", "band", "text"),
+    ("COMMENT", "notes", "text"),
+)
+
+_QSO_EXTRA_FIELDS = (
+    "NAME", "QTH", "GRIDSQUARE", "MY_SOTA_REF", "SOTA_REF",
+    "MY_POTA_REF", "POTA_REF", "STX", "SRX", "STX_STRING", "SRX_STRING",
+)
+
+DELETE_ACCENT_COLOR = (255, 82, 82)
+
+
+class QSOEditorScreen(SettingsScreenBase):
+    """Full-field editor for an existing ADIF QSO record."""
+
+    def __init__(self, qso_data, font, small_font, theme, lang="en"):
+        self.original_qso = dict(qso_data)
+        self.lang = lang
+        self.mode_selector = None
+        self.original_freq = str(qso_data.get("FREQ", "")).strip().replace(",", ".")
+
+        settings = [
+            {
+                "key": key,
+                "label": get_string(lang, label_key),
+                "value": str(qso_data.get(key, "")),
+                "type": field_type,
+            }
+            for key, label_key, field_type in _QSO_CORE_FIELDS
+        ]
+        for key in _QSO_EXTRA_FIELDS:
+            val = qso_data.get(key, "")
+            if val:
+                settings.append(
+                    {
+                        "key": key,
+                        "label": get_string(lang, key),
+                        "value": str(val),
+                        "type": "text",
+                    }
+                )
+
+        buttons = [
+            {"label": get_string(lang, "save"), "action": "save"},
+            {"label": get_string(lang, "cancel"), "action": "cancel"},
+        ]
+        super().__init__(
+            {},
+            font,
+            small_font,
+            get_string(lang, "edit_qso"),
+            settings,
+            buttons=buttons,
+            theme=theme,
+        )
+        self.max_visible_items = 3
+        self.row_start_offset = 30
+        self.row_step = 26
+        self.button_height = 24
+        self.button_bottom_margin = 30
+
+    def handle_event(self, event):
+        if self.mode_selector is not None:
+            res = self.mode_selector.handle_event(event)
+            if res != "active":
+                if res:
+                    self.settings[self.active_setting]["value"] = res
+                self.mode_selector = None
+            return "active"
+
+        if self.edit_mode and event.key == pygame.K_ESCAPE:
+            self.edit_mode = False
+            return "active"
+
+        if not self.edit_mode and event.key == pygame.K_ESCAPE:
+            return {"action": "cancel"}
+
+        if (
+            not self.edit_mode
+            and not self.focus_on_buttons
+            and event.key == pygame.K_RETURN
+            and self.settings[self.active_setting]["type"] == "mode"
+        ):
+            self.mode_selector = ModeSelector(self.font, self.small_font, self.theme)
+            return "active"
+
+        res = super().handle_event(event)
+        if res == "cancel":
+            return {"action": "cancel"}
+        if isinstance(res, dict):
+            return {"action": "cancel"}
+        if res == "save":
+            merged = dict(self.original_qso)
+            for s in self.settings:
+                merged[s["key"]] = str(s["value"]).strip()
+
+            call = str(merged.get("CALL", "")).strip().upper()
+            merged["CALL"] = call if call else str(self.original_qso.get("CALL", "")).strip().upper()
+
+            freq = str(merged.get("FREQ", "")).strip().replace(",", ".")
+            merged["FREQ"] = freq
+
+            band_changed = str(merged.get("BAND", "")) != str(self.original_qso.get("BAND", "")).strip()
+            auto_band = True
+            if freq != self.original_freq:
+                computed_band = get_band_from_freq(freq)
+                if computed_band != "N/A":
+                    merged["BAND"] = computed_band
+            elif band_changed:
+                auto_band = False
+
+            return {"action": "save", "data": merged, "auto_band": auto_band}
+        return "active"
+
+    def draw(self, screen):
+        super().draw(screen)
+        if self.mode_selector is not None:
+            self.mode_selector.draw(screen)
+
+
 class LogViewer:
     def __init__(self, log_file, font, small_font, theme, flag_sprite_sheet=None, lang="en"):
         self.font, self.small_font, self.lang, self.theme = font, small_font, lang, theme
         self.flag_sprite_sheet = flag_sprite_sheet
         self.rect = pygame.Rect(10, 10, 300, 150)
+        self.log_file = log_file
         self.log_entries = []
         self.parsed_data = []
+        self.record_line_indices = []
         self.active_index = 0
         self.scroll_offset = 0
         self.detail_scroll_offset = 0
         self.max_visible_items = (self.rect.height - 30) // 20
         self.selected_qso = None
+        self.detail_button_index = 0
+        self.confirm_delete = False
+        self.confirm_button_index = 0
+        self.editor = None
+        self.log_changed = False
         self.load_log(log_file)
 
     @staticmethod
@@ -984,45 +1124,121 @@ class LogViewer:
         return data
 
     def load_log(self, log_file):
-        if not os.path.exists(log_file): return
-        with open(log_file, 'r') as f:
-            lines = f.readlines()
+        self.log_file = log_file
+        self.log_entries = []
+        self.parsed_data = []
+        self.record_line_indices = []
+
+        if log_file and os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
             temp_entries = []
-            for line in lines:
+            for line_idx, line in enumerate(lines):
                 if "<CALL:" in line:
-                    temp_entries.append(line.strip())
-            
-            self.log_entries = []
-            self.parsed_data = []
-            
-            for entry in reversed(temp_entries):
+                    temp_entries.append((line_idx, line.strip()))
+
+            for line_idx, entry in reversed(temp_entries):
+                self.record_line_indices.append(line_idx)
                 self.log_entries.append(entry)
                 self.parsed_data.append(self.parse_line(entry))
 
+        if not self.log_entries:
+            self.active_index = 0
+            self.scroll_offset = 0
+        else:
+            self.active_index = max(0, min(self.active_index, len(self.log_entries) - 1))
+            max_scroll = max(0, len(self.log_entries) - self.max_visible_items)
+            self.scroll_offset = max(0, min(self.scroll_offset, max_scroll))
+            if self.active_index < self.scroll_offset:
+                self.scroll_offset = self.active_index
+            elif self.active_index >= self.scroll_offset + self.max_visible_items:
+                self.scroll_offset = self.active_index - self.max_visible_items + 1
+
+    def _draw_button_pair(self, screen, specs, active_idx):
+        for i, (rect, label, active_color) in enumerate(specs):
+            is_active = i == active_idx
+            color = active_color if is_active else self.theme.box_color
+            pygame.draw.rect(screen, self.theme.detail_bg_color, rect, border_radius=4)
+            pygame.draw.rect(screen, color, rect, 2 if is_active else 1, border_radius=4)
+            surf = self.small_font.render(label, True, color if is_active else self.theme.text_color)
+            screen.blit(surf, (rect.centerx - surf.get_width() // 2, rect.centery - surf.get_height() // 2))
+
     def handle_event(self, event):
+        if self.editor is not None:
+            res = self.editor.handle_event(event)
+            if isinstance(res, dict):
+                if res.get("action") == "save":
+                    line_idx = self.record_line_indices[self.active_index]
+                    update_qso_record(
+                        self.log_file,
+                        line_idx,
+                        res["data"],
+                        auto_band=res.get("auto_band", True),
+                    )
+                    self.log_changed = True
+                    self.load_log(self.log_file)
+                    self.selected_qso = None
+                    self.detail_scroll_offset = 0
+                self.editor = None
+            return "active"
+
+        if self.confirm_delete:
+            if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_TAB):
+                self.confirm_button_index = 1 - self.confirm_button_index
+            elif event.key == pygame.K_ESCAPE:
+                self.confirm_delete = False
+            elif event.key == pygame.K_RETURN:
+                if self.confirm_button_index == 1 and self.log_entries:
+                    line_idx = self.record_line_indices[self.active_index]
+                    delete_qso_record(self.log_file, line_idx)
+                    self.log_changed = True
+                    self.load_log(self.log_file)
+                    self.selected_qso = None
+                    self.detail_scroll_offset = 0
+                self.confirm_delete = False
+            return "active"
+
         if self.selected_qso is not None:
-            if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+            if event.key == pygame.K_ESCAPE:
                 self.selected_qso = None
                 self.detail_scroll_offset = 0
             elif event.key == pygame.K_DOWN:
                 self.detail_scroll_offset += 1
             elif event.key == pygame.K_UP:
                 self.detail_scroll_offset = max(0, self.detail_scroll_offset - 1)
+            elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_TAB):
+                self.detail_button_index = 1 - self.detail_button_index
+            elif event.key == pygame.K_RETURN:
+                if self.detail_button_index == 0:
+                    self.editor = QSOEditorScreen(
+                        self.selected_qso, self.font, self.small_font, self.theme, self.lang
+                    )
+                else:
+                    self.confirm_delete = True
+                    self.confirm_button_index = 0
             return "active"
 
         if event.key == pygame.K_ESCAPE: return "close"
-        if event.key == pygame.K_DOWN: self.active_index = min(len(self.log_entries) - 1, self.active_index + 1)
-        elif event.key == pygame.K_UP: self.active_index = max(0, self.active_index - 1)
+        if event.key == pygame.K_DOWN:
+            if self.log_entries:
+                self.active_index = min(len(self.log_entries) - 1, self.active_index + 1)
+        elif event.key == pygame.K_UP:
+            self.active_index = max(0, self.active_index - 1)
         elif event.key == pygame.K_RETURN:
             if self.log_entries:
                 self.selected_qso = self.parsed_data[self.active_index]
                 self.detail_scroll_offset = 0
+                self.detail_button_index = 0
         
         if self.active_index < self.scroll_offset: self.scroll_offset = self.active_index
         elif self.active_index >= self.scroll_offset + self.max_visible_items: self.scroll_offset = self.active_index - self.max_visible_items + 1
         return "active"
 
     def draw(self, screen):
+        if self.editor is not None:
+            self.editor.draw(screen)
+            return
+
         screen.fill(self.theme.bg_color)
         pygame.draw.rect(screen, self.theme.popup_border_color, self.rect, 2, border_radius=5)
         
@@ -1053,7 +1269,7 @@ class LogViewer:
                     label = get_string(self.lang, key)
                     details.append(f"{label}: {value}")
             
-            max_detail_visible = 4
+            max_detail_visible = 3
             self.detail_scroll_offset = max(0, min(self.detail_scroll_offset, len(details) - max_detail_visible))
             
             visible_details = details[self.detail_scroll_offset:self.detail_scroll_offset + max_detail_visible]
@@ -1074,9 +1290,29 @@ class LogViewer:
                 handle_y = track.y+(track_h-handle_h)*scroll_perc
                 handle = pygame.Rect(track.x, handle_y, 7, handle_h)
                 pygame.draw.rect(screen, self.theme.scrollbar_handle_color, handle, border_radius=3)
-            
-            exit_hint = self.small_font.render(get_string(self.lang, "press_esc_return") if get_string(self.lang, "press_esc_return") else "Press ESC to return", True, self.theme.popup_border_color)
-            screen.blit(exit_hint, (self.rect.centerx - exit_hint.get_width()//2, self.rect.bottom - 20))
+
+            btn_y = self.rect.bottom - 34
+            action_buttons = [
+                (pygame.Rect(self.rect.x + 15, btn_y, 125, 26), get_string(self.lang, "edit"), self.theme.highlight_color),
+                (pygame.Rect(self.rect.x + 160, btn_y, 125, 26), get_string(self.lang, "delete"), DELETE_ACCENT_COLOR),
+            ]
+            self._draw_button_pair(screen, action_buttons, self.detail_button_index)
+
+            if self.confirm_delete:
+                modal_rect = pygame.Rect(40, 42, 240, 86)
+                pygame.draw.rect(screen, self.theme.popup_bg_color, modal_rect, border_radius=6)
+                pygame.draw.rect(screen, DELETE_ACCENT_COLOR, modal_rect, 2, border_radius=6)
+                prompt = f"{get_string(self.lang, 'confirm_delete')} ({callsign})"
+                while self.small_font.size(prompt)[0] > modal_rect.width - 16 and len(prompt) > 4:
+                    prompt = prompt[:-4] + "..."
+                prompt_surf = self.small_font.render(prompt, True, self.theme.text_color)
+                screen.blit(prompt_surf, (modal_rect.centerx - prompt_surf.get_width() // 2, modal_rect.y + 12))
+
+                confirm_buttons = [
+                    (pygame.Rect(56, 88, 96, 26), get_string(self.lang, "cancel"), self.theme.highlight_color),
+                    (pygame.Rect(168, 88, 96, 26), get_string(self.lang, "delete"), DELETE_ACCENT_COLOR),
+                ]
+                self._draw_button_pair(screen, confirm_buttons, self.confirm_button_index)
             return
 
         header_y = self.rect.y + 10
@@ -1088,6 +1324,11 @@ class LogViewer:
             screen.blit(header_surf, (col_x[i], header_y))
         
         pygame.draw.line(screen, self.theme.scrollbar_handle_color, (self.rect.x, header_y + 18), (self.rect.right, header_y + 18), 1)
+
+        if not self.log_entries:
+            empty_surf = self.small_font.render(get_string(self.lang, "no_qsos_logged"), True, self.theme.text_color)
+            screen.blit(empty_surf, (self.rect.centerx - empty_surf.get_width() // 2, self.rect.centery - empty_surf.get_height() // 2 + 8))
+            return
 
         y = self.rect.y + 30
         visible_entries = self.log_entries[self.scroll_offset:self.scroll_offset+self.max_visible_items]

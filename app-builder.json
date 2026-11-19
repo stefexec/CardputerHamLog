@@ -1,6 +1,6 @@
 {
   "package_name": "hamlog",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "app_name": "HamLog",
   "bin_name": "hamlog",
   "description": "Ham Radio logger with ADIF export and Call lookup",

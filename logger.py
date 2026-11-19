@@ -1,6 +1,118 @@
 import os
 from datetime import datetime, timezone
 
+CANONICAL_ADIF_ORDER = (
+    "CALL",
+    "RST_SENT",
+    "RST_RCVD",
+    "QSO_DATE",
+    "TIME_ON",
+    "BAND",
+    "MODE",
+    "FREQ",
+)
+
+
+def _extract_adif_tag(record_line, tag):
+    start_idx = record_line.find(tag)
+    if start_idx == -1:
+        return ""
+    len_start = start_idx + len(tag)
+    len_end = record_line.find(">", len_start)
+    if len_end == -1:
+        return ""
+    try:
+        length = int(record_line[len_start:len_end])
+        val_start = len_end + 1
+        return record_line[val_start : val_start + length]
+    except (ValueError, IndexError):
+        return ""
+
+
+def _sort_adif_lines(lines):
+    header = []
+    records = []
+    in_header = True
+    for line in lines:
+        if in_header:
+            header.append(line)
+            if "<EOH>" in line:
+                in_header = False
+        elif line.strip():
+            records.append(line)
+
+    def get_qso_datetime(record_line):
+        date_str = _extract_adif_tag(record_line, "<QSO_DATE:")
+        time_str = _extract_adif_tag(record_line, "<TIME_ON:")
+        if date_str and time_str:
+            try:
+                if len(time_str) == 4:
+                    return datetime.strptime(date_str + time_str, "%Y%m%d%H%M")
+                if len(time_str) == 6:
+                    return datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
+            except ValueError:
+                return datetime.min
+        return datetime.min
+
+    return header + sorted(records, key=get_qso_datetime)
+
+
+def format_adif_record(qso_dict, auto_band=True):
+    data = {k: str(v).strip() for k, v in qso_dict.items() if v is not None}
+    if "CALL" in data:
+        data["CALL"] = data["CALL"].upper()
+    freq = data.get("FREQ", "").replace(",", ".")
+    if freq:
+        data["FREQ"] = freq
+        if auto_band:
+            band = get_band_from_freq(freq)
+            if band != "N/A":
+                data["BAND"] = band
+
+    ordered_keys = [k for k in CANONICAL_ADIF_ORDER if k in data]
+    ordered_keys.extend(k for k in data if k not in CANONICAL_ADIF_ORDER)
+
+    parts = []
+    for k in ordered_keys:
+        val = data[k]
+        if val != "":
+            parts.append(f"<{k}:{len(val)}>{val}")
+    parts.append("<EOR>")
+    return " ".join(parts) + "\n"
+
+
+def _write_lines_atomic(log_file, lines):
+    tmp_path = f"{log_file}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    os.replace(tmp_path, log_file)
+
+
+def delete_qso_record(log_file, file_line_index):
+    if not log_file or not os.path.exists(log_file):
+        return False
+    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    if not (0 <= file_line_index < len(lines)) or "<CALL:" not in lines[file_line_index]:
+        return False
+    del lines[file_line_index]
+    _write_lines_atomic(log_file, lines)
+    return True
+
+
+def update_qso_record(log_file, file_line_index, updated_qso_dict, auto_band=True):
+    if not log_file or not os.path.exists(log_file):
+        return False
+    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    if not (0 <= file_line_index < len(lines)) or "<CALL:" not in lines[file_line_index]:
+        return False
+    lines[file_line_index] = format_adif_record(updated_qso_dict, auto_band=auto_band)
+    sorted_lines = _sort_adif_lines(lines)
+    _write_lines_atomic(log_file, sorted_lines)
+    return True
+
+
 # --- ADIF Logger Klasse ---
 class ADIFLogger:
     def __init__(self, user_config):
@@ -20,73 +132,14 @@ class ADIFLogger:
             parent = os.path.dirname(os.path.abspath(self.filename))
             if parent:
                 os.makedirs(parent, exist_ok=True)
-            with open(self.filename, 'w') as f:
+            with open(self.filename, 'w', encoding='utf-8') as f:
                 f.write(f"Cardputer Zero Ham Log - Station {self.station_callsign}\n")
                 f.write("<EOH>\n")
 
     def sort_log_file(self):
-        with open(self.filename, 'r') as f:
+        with open(self.filename, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
-
-        header = []
-        records = []
-        in_header = True
-        for line in lines:
-            if in_header:
-                header.append(line)
-                if "<EOH>" in line:
-                    in_header = False
-            elif line.strip(): # ignore empty lines
-                records.append(line)
-
-        def get_qso_datetime(record_line):
-            date_str = ""
-            time_str = ""
-
-            # --- QSO_DATE ---
-            tag = "<QSO_DATE:"
-            start_idx = record_line.find(tag)
-            if start_idx != -1:
-                len_start = start_idx + len(tag)
-                len_end = record_line.find(">", len_start)
-                if len_end != -1:
-                    try:
-                        length = int(record_line[len_start:len_end])
-                        val_start = len_end + 1
-                        date_str = record_line[val_start : val_start + length]
-                    except (ValueError, IndexError):
-                        pass # Malformed tag
-
-            # --- TIME_ON ---
-            tag = "<TIME_ON:"
-            start_idx = record_line.find(tag)
-            if start_idx != -1:
-                len_start = start_idx + len(tag)
-                len_end = record_line.find(">", len_start)
-                if len_end != -1:
-                    try:
-                        length = int(record_line[len_start:len_end])
-                        val_start = len_end + 1
-                        time_str = record_line[val_start : val_start + length]
-                    except (ValueError, IndexError):
-                        pass # Malformed tag
-
-            if date_str and time_str:
-                try:
-                    if len(time_str) == 4:
-                        return datetime.strptime(date_str + time_str, "%Y%m%d%H%M")
-                    elif len(time_str) == 6:
-                        return datetime.strptime(date_str + time_str, "%Y%m%d%H%M%S")
-                except ValueError:
-                    return datetime.min # Parsing failed for date/time format
-            
-            return datetime.min # One of the tags was not found
-
-        sorted_records = sorted(records, key=get_qso_datetime)
-
-        with open(self.filename, 'w') as f:
-            f.writelines(header)
-            f.writelines(sorted_records)
+        _write_lines_atomic(self.filename, _sort_adif_lines(lines))
 
     def log_qso(self, call, rst_s, rst_r, band, mode, freq="", qso_datetime=None, my_sota_ref="", sota_ref="", my_pota_ref="", pota_ref="", stx_string="", srx_string="", **kwargs):
         if qso_datetime is None: qso_datetime = datetime.now(timezone.utc)

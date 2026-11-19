@@ -103,6 +103,14 @@ STRINGS = {
         "date": "Date",
         "time": "Time",
         "call": "Call",
+        "band": "Band",
+        "comment": "Notes",
+        "edit": "Edit",
+        "delete": "Delete",
+        "save": "Save",
+        "cancel": "Cancel",
+        "confirm_delete": "Delete QSO?",
+        "edit_qso": "Edit QSO",
         "press_esc_return": "Press ESC to return",
 
         # Lookup
@@ -220,6 +228,14 @@ STRINGS = {
         "date": "Datum",
         "time": "Zeit",
         "call": "Rufz.",
+        "band": "Band",
+        "comment": "Notizen",
+        "edit": "Bearbeiten",
+        "delete": "Löschen",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "confirm_delete": "QSO löschen?",
+        "edit_qso": "QSO bearbeiten",
         "press_esc_return": "ESC zum Zurückkehren",
 
         # Lookup

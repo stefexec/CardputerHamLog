@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
 PKG="hamlog"
-VER="0.1.0"
+VER="0.1.1"
 ARCH="arm64"
 STAGE="build/staging-${PKG}"
 DEB_OUT="build/${PKG}_${VER}_${ARCH}.deb"
@@ -21,7 +21,7 @@ mkdir -p \
 
 cat > "$STAGE/DEBIAN/control" <<'EOF'
 Package: hamlog
-Version: 0.1.0
+Version: 0.1.1
 Architecture: arm64
 Maintainer: Stefan <stefan@gurk.dev>
 Section: utils

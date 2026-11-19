@@ -37,6 +37,7 @@ from ui_components import (
     AdditionalInfoScreen,
     BandDistributionScreen,
     DateSelector,
+    ExportSettingsScreen,
     LanguageSettingsScreen,
     LogSettingsScreen,
     LogViewer,
@@ -54,6 +55,7 @@ from ui_components import (
 
 W, H = 320, 170
 ESC_HOLD_SECONDS = 3.0
+ESC_OVERLAY_DELAY = 0.5
 KBD_DEV = "/dev/input/by-path/platform-3f804000.i2c-event"
 
 EV_KEY = 1
@@ -386,6 +388,23 @@ def main():
     )
     main_screen.callsign_cache = callsign_cache
 
+    def has_active_subscreen():
+        return any(
+            (
+                lookup_screen,
+                band_distribution_screen,
+                statistics_menu,
+                log_viewer,
+                date_selector,
+                active_settings_screen,
+                settings_menu,
+                about_screen,
+                main_menu,
+                time_editor,
+                mode_selector,
+            )
+        )
+
     def handle_keydown(event):
         nonlocal running, show_log_popup, lookup_screen, band_distribution_screen, statistics_menu, log_viewer, date_selector, active_settings_screen, settings_menu, about_screen, main_menu, time_editor, mode_selector, user_config, theme, lang
 
@@ -422,6 +441,9 @@ def main():
             return
         if log_viewer:
             if log_viewer.handle_event(event) == "close":
+                if getattr(log_viewer, "log_changed", False):
+                    callsign_cache = load_callsign_cache(user_config["logfile"])
+                    main_screen.callsign_cache = callsign_cache
                 log_viewer = None
             return
         if date_selector:
@@ -586,9 +608,20 @@ def main():
                                 ctrl_held = value != 0
                             elif code == KEY_ESC:
                                 if value == 1:
-                                    esc_down_at = now
+                                    if has_active_subscreen():
+                                        esc_down_at = None
+                                        handle_keydown(
+                                            SimpleNamespace(
+                                                type=pygame.KEYDOWN,
+                                                key=pygame.K_ESCAPE,
+                                                unicode="",
+                                                mod=0,
+                                            )
+                                        )
+                                    else:
+                                        esc_down_at = now
                                 elif value == 0:
-                                    if esc_down_at is not None and (now - esc_down_at) < 0.8:
+                                    if esc_down_at is not None and (now - esc_down_at) < ESC_OVERLAY_DELAY:
                                         handle_keydown(
                                             SimpleNamespace(
                                                 type=pygame.KEYDOWN,
@@ -623,13 +656,16 @@ def main():
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
-                        if esc_down_at is None:
+                        if has_active_subscreen():
+                            esc_down_at = None
+                            handle_keydown(event)
+                        elif esc_down_at is None:
                             esc_down_at = now
                     else:
                         handle_keydown(event)
                 elif event.type == pygame.KEYUP:
                     if event.key == pygame.K_ESCAPE:
-                        if esc_down_at is not None and (now - esc_down_at) < 0.8:
+                        if esc_down_at is not None and (now - esc_down_at) < ESC_OVERLAY_DELAY:
                             handle_keydown(
                                 SimpleNamespace(
                                     type=pygame.KEYDOWN,
@@ -684,7 +720,7 @@ def main():
                     time_editor.draw(screen)
 
             # 3-second ESC hold exit overlay
-            if esc_down_at is not None:
+            if esc_down_at is not None and (now - esc_down_at) >= ESC_OVERLAY_DELAY:
                 elapsed = min(ESC_HOLD_SECONDS, now - esc_down_at)
                 pct = elapsed / ESC_HOLD_SECONDS
                 rem = max(0.0, ESC_HOLD_SECONDS - elapsed)
