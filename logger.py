@@ -17,6 +17,9 @@ class ADIFLogger:
 
     def _ensure_header(self):
         if not os.path.exists(self.filename):
+            parent = os.path.dirname(os.path.abspath(self.filename))
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with open(self.filename, 'w') as f:
                 f.write(f"Cardputer Zero Ham Log - Station {self.station_callsign}\n")
                 f.write("<EOH>\n")

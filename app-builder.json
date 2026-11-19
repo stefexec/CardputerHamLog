@@ -1,17 +1,22 @@
 {
   "package_name": "hamlog",
-  "version": "0.1",
+  "version": "0.1.0",
   "app_name": "HamLog",
-  "bin_name": "run.sh",
+  "bin_name": "hamlog",
   "description": "Ham Radio logger with ADIF export and Call lookup",
   "store": {
     "summary": "Ham Radio Log for Cardputer Zero",
-    "description": "Ham Radio logger with ADIF export and Call lookup",
+    "description": "Portable Ham Radio QSO logger for Cardputer Zero with ADIF export, band statistics, multi-language UI, country flags, and HamDB/QRZ callsign lookup.",
+    "locales": {
+      "de": { "summary": "Amateurfunk-Logger mit ADIF-Export und Rufzeichenabfrage" },
+      "ja": { "summary": "CardputerZero用のアマチュア無線ロガー" },
+      "zh-CN": { "summary": "CardputerZero 的业余无线电日志应用" }
+    },
     "categories": ["Radio & Comms"],
     "screenshots": ["assets/1.png", "assets/2.png", "assets/3.png", "assets/4.png"],
-    "icon": "assets/icon.png",
+    "icon": "assets/hamlog.png",
     "license": "MIT",
-    "source_repo": "https://github.com/stefexec/HamRadioLog",
+    "source_repo": "https://github.com/stefexec/CardputerHamLog",
     "author": { "github": "stefexec", "display_name": "Stefan" },
     "share_code": "HAML",
     "permissions": {

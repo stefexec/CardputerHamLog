@@ -101,6 +101,29 @@ class MainScreen:
             if self.active_pos[1] < len(current_row):
                 active_field = current_row[self.active_pos[1]]
 
+        if event.key == pygame.K_TAB:
+            if active_field: active_field.active = False
+            self.clear_on_next_input = True
+            positions = []
+            max_row = len(self.fields) - 2
+            for r in range(max_row + 1):
+                for c, f in enumerate(self.fields[r]):
+                    if f is not None:
+                        positions.append((True, r, c))
+            for b in range(3):
+                positions.append((False, 0, b))
+            cur = (True, self.active_pos[0], self.active_pos[1]) if self.main_grid_active else (False, 0, self.bottom_focus)
+            idx = positions.index(cur) if cur in positions else 0
+            step = -1 if (getattr(event, "mod", 0) & pygame.KMOD_SHIFT) else 1
+            nxt = positions[(idx + step) % len(positions)]
+            self.main_grid_active = nxt[0]
+            if self.main_grid_active:
+                self.active_pos = [nxt[1], nxt[2]]
+                self.fields[nxt[1]][nxt[2]].active = True
+            else:
+                self.bottom_focus = nxt[2]
+            return "active"
+
         if event.key in (pygame.K_DOWN, pygame.K_UP, pygame.K_RIGHT, pygame.K_LEFT):
             if active_field: active_field.active = False
             self.clear_on_next_input = True

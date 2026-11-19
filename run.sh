@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-set -e
-
+#!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
-exec python3 "$DIR/main.py" "$@"
+exec /usr/bin/python3 "$DIR/main.py" "$@"

@@ -1,8 +1,9 @@
 import os
 from encryption_utils import encrypt_password, decrypt_password, generate_key, KEY_FILE
+from paths import data_path, resolve_data_path
 
-USER_CONFIG_FILE = "./config/config.txt"
-APP_STATE_FILE = "./config/session.gurk"
+USER_CONFIG_FILE = data_path("config", "config.txt")
+APP_STATE_FILE = data_path("config", "session.gurk")
 
 def save_app_state(freq, mode, my_sota="", sota_ref="", my_pota="", pota_ref="", stx_string="", srx_string=""):
     os.makedirs(os.path.dirname(APP_STATE_FILE), exist_ok=True)
@@ -22,7 +23,7 @@ def load_app_state():
 
 _USER_CONFIG_DEFAULTS = {
     "station_callsign": "NOCALL",
-    "logfile": "./logs/hamputer_adif_log.adi",
+    "logfile": data_path("logs", "hamputer_adif_log.adi"),
     "my_gridsquare": "",
     "tx_pwr": "",
     "itu_zone": "",
@@ -81,6 +82,7 @@ def load_user_config():
     for key, value in config.items():
         if key.startswith("theme_") and not isinstance(value, str):
             config[key] = ",".join(map(str, value))
+    config["logfile"] = resolve_data_path(config.get("logfile", ""))
     return config
 
 def load_callsign_cache(log_file):

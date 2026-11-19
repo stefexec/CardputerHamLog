@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import os
 from language import get_string
 from config_manager import load_user_config
+from paths import data_path
 
 def export_today_adif(log_file, lang="en"):
     return export_by_date_adif(log_file, datetime.now(timezone.utc), lang)
@@ -15,7 +16,7 @@ def export_by_date_adif(log_file, export_date, lang="en"):
     user_config = load_user_config()
     callsign = user_config.get("station_callsign", "NOCALL")
 
-    suggested_filename = os.path.join("logs", f"{callsign}-{export_date.strftime('%Y-%m-%d')}.adi")
+    suggested_filename = data_path("logs", f"{callsign}-{export_date.strftime('%Y-%m-%d')}.adi")
 
     header = (
         "ADIF from CardputerHamLog\n"

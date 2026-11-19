@@ -23,6 +23,12 @@ secret.key
 # Ignore generated log files and exports.
 logs/
 
+# Build and packaging artifacts
+build/
+dist/
+.sconsign.dblite
+*.deb
+
 # OS specific
 .DS_Store
 Thumbs.db

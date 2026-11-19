@@ -1,11 +1,14 @@
+import os
 from cryptography.fernet import Fernet
+from paths import data_path
 
-KEY_FILE = "secret.key"
+KEY_FILE = data_path("config", "secret.key")
 
 def generate_key():
     """
     Generates a key and save it into a file
     """
+    os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
     key = Fernet.generate_key()
     with open(KEY_FILE, "wb") as key_file:
         key_file.write(key)
