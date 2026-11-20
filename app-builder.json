@@ -17,7 +17,7 @@
     "icon": "assets/hamlog.png",
     "license": "MIT",
     "source_repo": "https://github.com/stefexec/CardputerHamLog",
-    "author": { "github": "stefexec", "display_name": "Stefan" },
+    "author": { "github": "stefexec", "display_name": "Gurkenwerfer" },
     "share_code": "HAML",
     "permissions": {
       "camera": false,

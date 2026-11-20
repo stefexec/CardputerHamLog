@@ -23,7 +23,7 @@ cat > "$STAGE/DEBIAN/control" <<'EOF'
 Package: hamlog
 Version: 0.1.1
 Architecture: arm64
-Maintainer: Stefan <stefan@gurk.dev>
+Maintainer: Gurkenwerfer <stefan@gurk.dev>
 Section: utils
 Priority: optional
 Depends: python3, python3-pygame, python3-cryptography

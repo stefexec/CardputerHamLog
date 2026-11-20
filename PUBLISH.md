@@ -11,7 +11,7 @@ Portal: <https://dev.cardputer.cc/#/upload>
 - Package: `hamlog`
 - Version: `0.1.1`
 - Architecture: `arm64`
-- Maintainer: `Stefan <stefan@gurk.dev>`
+- Maintainer: `Gurkenwerfer <stefan@gurk.dev>`
 - APPLaunch desktop path: `/usr/share/APPLaunch/applications/hamlog.desktop`
 - Executable path: `/usr/share/APPLaunch/bin/hamlog`
 
